@@ -1666,7 +1666,9 @@ static int get_txin_issuance_size(const struct wally_tx_input *input,
             return WALLY_EINVAL;
         if (!(c_n = confidential_value_length_from_bytes(input->inflation_keys)))
             return WALLY_EINVAL;
-        *issuance_size += c_n + sizeof(input->blinding_nonce) + sizeof(input->entropy);
+        /* +1 for the Sequentia asset denomination byte. */
+        *issuance_size += c_n + sizeof(input->blinding_nonce) + sizeof(input->entropy)
+            + sizeof(input->issuance_denomination);
         if (issuance_rp_size) {
             *issuance_rp_size = input->issuance_amount_rangeproof_len +
                 input->inflation_keys_rangeproof_len;
@@ -2046,6 +2048,8 @@ static int tx_to_bytes(const struct wally_tx *tx,
             p += SHA256_LEN;
             p += confidential_value_to_bytes(input->issuance_amount, input->issuance_amount_len, p);
             p += confidential_value_to_bytes(input->inflation_keys, input->inflation_keys_len, p);
+            /* Sequentia: re-emit the asset denomination byte. */
+            *p++ = input->issuance_denomination;
 #endif
         }
     }
@@ -2289,6 +2293,8 @@ static int analyze_tx(const unsigned char *bytes, size_t bytes_len,
             p += 2 * SHA256_LEN;
             ensure_committed_value(p); /* issuance amount */
             ensure_committed_value(p); /* inflation keys */
+            ensure_n(sizeof(uint8_t)); /* Sequentia: asset denomination */
+            p += sizeof(uint8_t);
         }
     }
 
@@ -2420,6 +2426,8 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
         const unsigned char *issuance_amount = NULL, *inflation_keys = NULL;
         uint32_t index, sequence;
         uint64_t script_len, issuance_amount_len = 0, inflation_keys_len = 0;
+        uint8_t denomination = 0;
+        bool is_issuance = false;
         p += WALLY_TXHASH_LEN;
         p += uint32_from_le_bytes(p, &index);
         p += varint_from_bytes(p, &script_len);
@@ -2435,6 +2443,10 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
             p += confidential_value_varint_from_bytes(p, &issuance_amount_len);
             inflation_keys = p;
             p += confidential_value_varint_from_bytes(p, &inflation_keys_len);
+            /* Sequentia: 1-byte asset denomination follows the inflation keys. */
+            denomination = *p;
+            p += sizeof(uint8_t);
+            is_issuance = true;
         }
         ret = tx_elements_input_init(txhash, WALLY_TXHASH_LEN, index, sequence,
                                      script_len ? script : NULL, script_len, NULL,
@@ -2445,6 +2457,12 @@ static int tx_from_bytes(const unsigned char *bytes, size_t bytes_len,
                                      NULL, 0, NULL, 0, NULL, &(*output)->inputs[i], is_elements);
         if (ret != WALLY_OK)
             goto fail;
+#ifndef WALLY_ABI_NO_ELEMENTS
+        if (is_issuance)
+            (*output)->inputs[i].issuance_denomination = denomination;
+#else
+        (void)denomination; (void)is_issuance;
+#endif
         (*output)->num_inputs += 1;
     }
 
