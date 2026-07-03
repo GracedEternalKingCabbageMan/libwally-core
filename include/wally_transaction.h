@@ -119,6 +119,10 @@ struct wally_tx_input {
     unsigned char *inflation_keys_rangeproof;
     size_t inflation_keys_rangeproof_len;
     struct wally_tx_witness_stack *pegin_witness;
+    /* Sequentia extension: CAssetIssuance carries a 1-byte asset denomination
+     * (decimal precision) serialized after the inflation keys. Preserved here so
+     * issuance txs round-trip; 0 for non-issuance inputs. */
+    uint8_t issuance_denomination;
 #endif /* WALLY_ABI_NO_ELEMENTS */
 };
 
