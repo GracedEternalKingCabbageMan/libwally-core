@@ -1,3 +1,61 @@
+# Sequentia fork of libwally-core
+
+This repository is a fork of
+[ElementsProject/libwally-core](https://github.com/ElementsProject/libwally-core)
+carrying one Sequentia-specific patch. Everything below the horizontal rule is
+the unmodified upstream README; upstream API documentation applies unchanged.
+
+**Why this fork exists.** Sequentia (a Bitcoin sidechain for asset tokenization
+and decentralized exchange, node repo:
+[Sequentia](https://github.com/GracedEternalKingCabbageMan/Sequentia)) extends
+the Elements asset-issuance structure `CAssetIssuance` with a 1-byte asset
+denomination field, `nDenomination` (the asset's decimal precision), serialized
+after `nInflationKeys` (see `src/primitives/confidential.h` in the node repo).
+Stock libwally does not know about this byte, so it under-reads every issuance
+input: `wally_tx_from_bytes` fails with `WALLY_EINVAL` on any Sequentia
+transaction that issues or reissues an asset, and software built on stock
+libwally cannot deserialize Sequentia blocks containing an issuance.
+
+**What the patch changes.** A single commit (`5bc915e3`, touching
+`include/wally_transaction.h` and `src/transaction.c`) consumes and preserves
+the extra byte on the Elements issuance parse/serialize path, so issuance
+transactions round-trip byte-exact:
+
+- `analyze_tx` (`src/transaction.c`): accounts for the extra byte when
+  validating the raw transaction layout.
+- `tx_from_bytes` (`src/transaction.c`): reads the byte into a new field,
+  `struct wally_tx_input.issuance_denomination` (0 for non-issuance inputs).
+- `get_txin_issuance_size` (`src/transaction.c`): adds 1 to the computed
+  issuance size.
+- `tx_to_bytes` (`src/transaction.c`): re-emits the byte when serializing an
+  issuance input.
+
+Non-issuance inputs are untouched. Full technical detail, including the exact
+byte layout and compatibility caveats, is in
+[SEQUENTIA-PATCH.md](./SEQUENTIA-PATCH.md).
+
+**Branches.**
+
+- `sequentia-issuance-denomination` carries the patch, based on upstream
+  release 1.4.0 (`release_1.4.0` + one commit). Pin this branch.
+- `master` and all other branches track upstream and are unpatched.
+
+**Who consumes it.** [SeqLN](https://github.com/GracedEternalKingCabbageMan/seqln)
+(the Core Lightning fork that runs on Sequentia and Bitcoin from the same
+binary) pins this branch via its `external/libwally-core` git submodule on the
+`sequentia-stable` branch. Without the patch, `lightningd` crashes as soon as
+it syncs a Sequentia block containing an asset issuance.
+
+**Compatibility warning.** The patched branch expects the Sequentia issuance
+layout. It will misparse stock Elements/Liquid issuance transactions, which do
+not carry the denomination byte. Use it for Sequentia only.
+
+Sequentia is testnet software (public testnet, parent chain Bitcoin testnet4);
+no mainnet exists. Protocol documentation lives in the node repo under
+[doc/sequentia](https://github.com/GracedEternalKingCabbageMan/Sequentia/tree/HEAD/doc/sequentia).
+
+---
+
 # libwally-core
 
 Wally is a cross-platform, cross-language collection of useful primitives
