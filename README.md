@@ -1,5 +1,18 @@
 # libwally-core
 
+**Sequentia fork.** This is a fork of
+[ElementsProject/libwally-core](https://github.com/ElementsProject/libwally-core).
+`master` is unpatched upstream. The branch
+**[`sequentia-issuance-denomination`](https://github.com/GracedEternalKingCabbageMan/libwally-core/tree/sequentia-issuance-denomination)**
+(`release_1.4.0` + the patch commit `5bc915e3` + a documentation commit) carries one
+patch to `src/transaction.c` and `include/wally_transaction.h` that parses and
+re-serialises the 1-byte `nDenomination` field Sequentia adds to `CAssetIssuance`;
+stock libwally under-reads Sequentia issuance transactions by that byte and fails with
+`WALLY_EINVAL`. [SeqLN](https://github.com/GracedEternalKingCabbageMan/seqln) pins
+that branch as its `external/libwally-core` submodule. The patched branch is for
+Sequentia only (it misparses stock Elements/Liquid issuances). Details: the README
+and `SEQUENTIA-PATCH.md` on that branch.
+
 Wally is a cross-platform, cross-language collection of useful primitives
 for cryptocurrency wallets.
 
